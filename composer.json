@@ -1,0 +1,44 @@
+{
+    "name": "urlcv/scrum-retro",
+    "description": "Realtime scrum retrospective board with share links, join-by-name, and flexible sections for remote teams.",
+    "type": "library",
+    "version": "dev-main",
+    "license": "MIT",
+    "keywords": [
+        "scrum",
+        "retrospective",
+        "agile",
+        "kanban",
+        "team-collaboration",
+        "remote"
+    ],
+    "homepage": "https://urlcv.com/tools/scrum-retro",
+    "authors": [
+        {
+            "name": "URLCV",
+            "homepage": "https://urlcv.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10|^11|^12",
+        "illuminate/database": "^10|^11|^12"
+    },
+    "autoload": {
+        "psr-4": {
+            "URLCV\\ScrumRetro\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "URLCV\\ScrumRetro\\Laravel\\ScrumRetroServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "minimum-stability": "stable"
+}

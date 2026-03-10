@@ -199,6 +199,14 @@
                     >
                         New room
                     </button>
+                    <button
+                        x-show="isHost"
+                        type="button"
+                        class="rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                        @click="deleteBoard()"
+                    >
+                        Delete board
+                    </button>
                 </div>
             </div>
 
@@ -1039,6 +1047,42 @@
                     })
                     .catch(() => {
                         this.boardError = 'Copy failed. Please copy the URL from your browser bar.';
+                    });
+            },
+
+            deleteBoard() {
+                this.boardError = '';
+
+                if (!this.isHost || !this.hostToken || !this.sessionCode) {
+                    this.boardError = 'Only the organiser can delete this board.';
+                    return;
+                }
+
+                if (!window.confirm('Delete this board and all retro data for this session? This cannot be undone.')) {
+                    return;
+                }
+
+                fetch('/tools/scrum-retro/session/' + encodeURIComponent(this.sessionCode) + '/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken(),
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        host_token: this.hostToken,
+                    }),
+                })
+                    .then(async (res) => {
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok || !data.success) {
+                            throw new Error(data.message || this.firstValidationError(data) || 'Unable to delete board.');
+                        }
+
+                        this.startAnotherRoom();
+                    })
+                    .catch((error) => {
+                        this.boardError = error.message || 'Unable to delete board.';
                     });
             },
 

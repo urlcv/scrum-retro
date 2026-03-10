@@ -24,6 +24,7 @@ class ScrumRetroServiceProvider extends ServiceProvider
         $this->registerItemsRoute();
         $this->registerMoveItemRoute();
         $this->registerAreasRoute();
+        $this->registerDeleteSessionRoute();
     }
 
     private function registerSessionRoutes(): void
@@ -317,6 +318,34 @@ class ScrumRetroServiceProvider extends ServiceProvider
         })
             ->middleware(['web', 'throttle:180,1'])
             ->name('tools.scrum-retro.items.move');
+    }
+
+    private function registerDeleteSessionRoute(): void
+    {
+        Route::post('/tools/scrum-retro/session/{code}/delete', static function (Request $request, string $code) {
+            $validated = $request->validate([
+                'host_token' => ['required', 'string', 'max:128'],
+            ]);
+
+            $session = RetroSession::where('code', $code)
+                ->where('host_token', $validated['host_token'])
+                ->first();
+
+            if (! $session) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid host or session.',
+                ], 403);
+            }
+
+            $session->delete();
+
+            return response()->json([
+                'success' => true,
+            ]);
+        })
+            ->middleware(['web', 'throttle:20,1'])
+            ->name('tools.scrum-retro.session.delete');
     }
 
     /**

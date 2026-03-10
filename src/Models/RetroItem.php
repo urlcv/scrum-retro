@@ -15,6 +15,7 @@ class RetroItem extends Model
         'session_id',
         'participant_id',
         'area_key',
+        'sort_order',
         'text',
         'color',
     ];

@@ -113,7 +113,22 @@ class RetroSession extends Model
         /** @var Collection<int, RetroItem> $items */
         $items = $this->relationLoaded('items')
             ? $this->items
-            : $this->items()->with('participant')->orderBy('created_at')->get();
+            : $this->items()
+                ->with('participant')
+                ->orderBy('area_key')
+                ->orderBy('sort_order')
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->get();
+
+        $items = $items
+            ->sortBy([
+                ['area_key', 'asc'],
+                ['sort_order', 'asc'],
+                ['created_at', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->values();
 
         $participantsPayload = $participants->map(static function (RetroParticipant $participant): array {
             return [
@@ -128,6 +143,7 @@ class RetroSession extends Model
             return [
                 'id' => $item->id,
                 'area_key' => $item->area_key,
+                'sort_order' => (int) ($item->sort_order ?? 0),
                 'text' => $item->text,
                 'color' => $item->color,
                 'created_at' => $item->created_at?->toIso8601String(),

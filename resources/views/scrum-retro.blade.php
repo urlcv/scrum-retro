@@ -38,14 +38,23 @@
     }
 
     .retro-scroll {
-        max-height: 16rem;
+        min-height: 3rem;
+        overflow-y: auto;
+    }
+
+    .retro-fullscreen {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 70 !important;
+        border-radius: 0 !important;
+        padding: 1rem !important;
         overflow-y: auto;
     }
 </style>
 @endpush
 
 <div x-data="scrumRetroBoard()" x-init="init()" x-cloak class="-m-6">
-    <div class="retro-shell space-y-4">
+    <div class="retro-shell space-y-4" :class="{ 'retro-fullscreen': fullscreen }">
         <div class="retro-panel px-4 py-3">
             <h2 class="text-lg font-semibold text-slate-900">Realtime Scrum Retro</h2>
             <p class="mt-1 text-sm text-slate-600">
@@ -142,7 +151,7 @@
                 <p class="text-xs text-slate-600">The organiser gets a host token automatically and can rename lanes at any time.</p>
                 <button
                     type="button"
-                    class="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                    class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     @click="createSession()"
                     :disabled="creating"
                 >
@@ -167,6 +176,14 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        @click="toggleFullscreen()"
+                    >
+                        <span x-show="!fullscreen">Full screen</span>
+                        <span x-show="fullscreen">Exit full screen</span>
+                    </button>
                     <button
                         type="button"
                         class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
@@ -198,7 +215,7 @@
                     </div>
                     <button
                         type="button"
-                        class="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                        class="rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         @click="joinSession()"
                         :disabled="joining"
                     >
@@ -210,46 +227,122 @@
             </div>
 
             <div x-show="participantToken" class="grid gap-4 xl:grid-cols-12" x-cloak>
+                <p x-show="boardError" class="xl:col-span-12 text-sm text-rose-700" x-text="boardError"></p>
+
                 <div class="xl:col-span-9 space-y-3">
                     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         <template x-for="lane in areas" :key="lane.key">
-                            <section class="retro-lane flex flex-col">
+                            <section
+                                class="retro-lane flex flex-col transition-colors"
+                                :class="isLaneDropActive(lane.key) ? 'ring-2 ring-primary-300 bg-primary-50/40' : ''"
+                                @dragover.prevent="setLaneDropTarget(lane.key)"
+                                @dragleave="clearLaneDropTarget(lane.key, $event)"
+                                @drop.prevent="handleLaneDrop(lane.key)"
+                            >
                                 <header class="rounded-t-[0.75rem] border-b border-slate-200 px-3 py-2" :class="laneHeaderClass(lane.color)">
                                     <h4 class="text-sm font-semibold" x-text="lane.title"></h4>
                                     <p class="text-[11px] opacity-80" x-text="lane.subtitle"></p>
                                 </header>
 
-                                <div class="p-3 space-y-3 flex-1">
-                                    <div class="retro-scroll space-y-2 pr-1">
-                                        <template x-for="item in itemsForArea(lane.key)" :key="'item-' + item.id">
-                                            <article class="rounded-md border bg-white p-2" :class="itemCardClass(item.color)">
-                                                <p class="text-sm whitespace-pre-line text-slate-800" x-text="item.text"></p>
-                                                <div class="mt-2 text-[11px] text-slate-500">
-                                                    by <span class="font-semibold" x-text="item.author?.name || 'Teammate'"></span>
-                                                </div>
-                                            </article>
+                                <div class="p-3 flex flex-1 min-h-0 flex-col gap-3">
+                                    <div class="retro-scroll flex-1 space-y-2 pr-1">
+                                        <div
+                                            class="h-2 rounded border-2 border-dashed border-transparent"
+                                            :class="dropTargetClass(lane.key, 0)"
+                                            @dragover.prevent="setDropTarget(lane.key, 0)"
+                                            @dragleave="clearDropTarget(lane.key, 0)"
+                                            @drop.prevent="handleDrop(lane.key, 0)"
+                                        ></div>
+
+                                        <template x-for="(item, idx) in itemsForArea(lane.key)" :key="'item-' + item.id">
+                                            <div class="space-y-2">
+                                                <article
+                                                    draggable="true"
+                                                    @dragstart="startDragging(item.id)"
+                                                    @dragend="stopDragging()"
+                                                    class="rounded-md border bg-white p-2 cursor-move"
+                                                    :class="itemCardClass(item.color)"
+                                                >
+                                                    <div class="mb-1 flex items-center justify-between gap-2">
+                                                        <span class="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-200">
+                                                            <span x-text="item.author?.name || 'Teammate'"></span>
+                                                        </span>
+                                                        <span
+                                                            class="inline-flex h-5 w-5 items-center justify-center rounded border border-slate-200 bg-white text-slate-400"
+                                                            title="Drag to move"
+                                                            aria-label="Drag to move"
+                                                        >
+                                                            <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                                <circle cx="6" cy="5" r="1.4"></circle>
+                                                                <circle cx="6" cy="10" r="1.4"></circle>
+                                                                <circle cx="6" cy="15" r="1.4"></circle>
+                                                                <circle cx="14" cy="5" r="1.4"></circle>
+                                                                <circle cx="14" cy="10" r="1.4"></circle>
+                                                                <circle cx="14" cy="15" r="1.4"></circle>
+                                                            </svg>
+                                                        </span>
+                                                    </div>
+                                                    <p class="text-sm whitespace-pre-line text-slate-800" x-text="item.text"></p>
+                                                </article>
+
+                                                <div
+                                                    class="h-2 rounded border-2 border-dashed border-transparent"
+                                                    :class="dropTargetClass(lane.key, idx + 1)"
+                                                    @dragover.prevent="setDropTarget(lane.key, idx + 1)"
+                                                    @dragleave="clearDropTarget(lane.key, idx + 1)"
+                                                    @drop.prevent="handleDrop(lane.key, idx + 1)"
+                                                ></div>
+                                            </div>
                                         </template>
-                                        <p x-show="itemsForArea(lane.key).length === 0" class="text-xs text-slate-500">
+
+                                        <p x-show="itemsForArea(lane.key).length === 0" class="pt-1 text-xs text-slate-500">
                                             No ideas here yet.
                                         </p>
                                     </div>
 
-                                    <div class="space-y-2">
-                                        <textarea
-                                            rows="2"
-                                            x-model="draftByArea[lane.key]"
-                                            class="block w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-sky-500 focus:ring-sky-500"
-                                            placeholder="Add an idea"
-                                        ></textarea>
-                                        <button
-                                            type="button"
-                                            class="w-full rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-                                            :disabled="addingByArea[lane.key]"
-                                            @click="addIdea(lane.key)"
+                                    <div class="mt-auto space-y-2">
+                                        <div
+                                            x-show="isComposerOpen(lane.key)"
+                                            x-cloak
+                                            class="rounded-md border border-slate-200 bg-white p-2 space-y-2"
                                         >
-                                            <span x-show="!addingByArea[lane.key]">Add to lane</span>
-                                            <span x-show="addingByArea[lane.key]">Adding...</span>
-                                        </button>
+                                            <textarea
+                                                rows="2"
+                                                x-model="draftByArea[lane.key]"
+                                                class="block w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-sky-500 focus:ring-sky-500"
+                                                placeholder="Add an idea"
+                                            ></textarea>
+                                            <div class="flex items-center justify-end gap-2">
+                                                <button
+                                                    type="button"
+                                                    class="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                                                    @click="closeComposer(lane.key)"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    :disabled="isAdding(lane.key)"
+                                                    @click="addIdea(lane.key)"
+                                                >
+                                                    <span x-show="!isAdding(lane.key)">Add</span>
+                                                    <span x-show="isAdding(lane.key)">Adding...</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex justify-center">
+                                            <button
+                                                type="button"
+                                                class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                                                :aria-label="isComposerOpen(lane.key) ? 'Close add form' : 'Open add form'"
+                                                @click="toggleComposer(lane.key)"
+                                            >
+                                                <span x-show="!isComposerOpen(lane.key)" class="text-lg leading-none">+</span>
+                                                <span x-show="isComposerOpen(lane.key)" class="text-lg leading-none">−</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </section>
@@ -322,7 +415,7 @@
                             </template>
                             <button
                                 type="button"
-                                class="w-full rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                                class="w-full rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                 @click="saveAreaLayout()"
                                 :disabled="savingAreas"
                             >
@@ -332,7 +425,6 @@
                         </div>
                     </div>
 
-                    <p x-show="boardError" class="text-sm text-rose-700" x-text="boardError"></p>
                 </aside>
             </div>
         </div>
@@ -348,6 +440,7 @@
             participantToken: null,
             hostToken: null,
             isHost: false,
+            fullscreen: false,
             pollTimer: null,
             copied: false,
 
@@ -355,6 +448,10 @@
             joining: false,
             savingAreas: false,
             addingByArea: {},
+            movingItem: false,
+            draggingItemId: null,
+            dropTarget: null,
+            laneDropKey: null,
 
             createError: '',
             joinError: '',
@@ -369,6 +466,7 @@
             items: [],
             participants: [],
             draftByArea: {},
+            composerOpenByArea: {},
             areaEditor: [],
             areaEditorServerHash: '',
 
@@ -407,6 +505,12 @@
                 this.hostToken = window.localStorage.getItem(base + 'hostToken');
                 this.isHost = !!this.hostToken;
 
+                window.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && this.fullscreen) {
+                        this.setFullscreen(false);
+                    }
+                });
+
                 this.startPolling();
             },
 
@@ -420,11 +524,11 @@
 
             themePreviewLine(theme) {
                 const previews = {
-                    classic: 'Went Well | Could Improve | Action Items',
-                    momentum: 'Rocket Fuel | Gravity Wells | Next Orbit',
-                    weather: 'Sunny Skies | Cloud Cover | Lightning Fixes',
-                    trailblazer: 'Strong Footing | Loose Gravel | Trail Markers',
-                    custom: (this.createForm.custom_areas || []).filter(Boolean).join(' | ') || 'Define your own lane names',
+                    classic: 'Went Well | Could Improve | Try Next | Action Takeaways',
+                    momentum: 'Rocket Fuel | Gravity Wells | Next Orbit | Action Takeaways',
+                    weather: 'Sunny Skies | Cloud Cover | Lightning Fixes | Action Takeaways',
+                    trailblazer: 'Strong Footing | Loose Gravel | Trail Markers | Action Takeaways',
+                    custom: this.customPreview(),
                 };
 
                 return previews[theme] || previews.momentum;
@@ -444,6 +548,17 @@
                 }
 
                 this.createForm.custom_areas.splice(index, 1);
+            },
+
+            customPreview() {
+                const lanes = (this.createForm.custom_areas || []).filter(Boolean);
+                const hasAction = lanes.some((title) => /action|takeaway/i.test(title));
+
+                if (!hasAction) {
+                    lanes.push('Action Takeaways');
+                }
+
+                return lanes.length ? lanes.join(' | ') : 'Define your own lane names';
             },
 
             createSession() {
@@ -609,10 +724,153 @@
                     next[lane.key] = this.draftByArea[lane.key] || '';
                 });
                 this.draftByArea = next;
+
+                const nextComposer = {};
+                this.areas.forEach((lane) => {
+                    nextComposer[lane.key] = this.composerOpenByArea[lane.key] === true;
+                });
+                this.composerOpenByArea = nextComposer;
             },
 
             itemsForArea(areaKey) {
                 return this.items.filter((item) => item.area_key === areaKey);
+            },
+
+            isAdding(areaKey) {
+                return this.addingByArea[areaKey] === true;
+            },
+
+            isComposerOpen(areaKey) {
+                return this.composerOpenByArea[areaKey] === true;
+            },
+
+            toggleComposer(areaKey) {
+                this.composerOpenByArea[areaKey] = !this.isComposerOpen(areaKey);
+            },
+
+            closeComposer(areaKey) {
+                this.composerOpenByArea[areaKey] = false;
+            },
+
+            startDragging(itemId) {
+                this.draggingItemId = itemId;
+            },
+
+            stopDragging() {
+                this.draggingItemId = null;
+                this.dropTarget = null;
+                this.laneDropKey = null;
+            },
+
+            setDropTarget(areaKey, index) {
+                if (!this.draggingItemId) {
+                    return;
+                }
+
+                this.dropTarget = areaKey + ':' + index;
+            },
+
+            clearDropTarget(areaKey, index) {
+                const current = areaKey + ':' + index;
+                if (this.dropTarget === current) {
+                    this.dropTarget = null;
+                }
+            },
+
+            dropTargetClass(areaKey, index) {
+                return this.dropTarget === (areaKey + ':' + index)
+                    ? 'border-primary-400 bg-primary-50'
+                    : '';
+            },
+
+            isLaneDropActive(areaKey) {
+                return this.laneDropKey === areaKey;
+            },
+
+            setLaneDropTarget(areaKey) {
+                if (!this.draggingItemId) {
+                    return;
+                }
+
+                this.laneDropKey = areaKey;
+                this.dropTarget = areaKey + ':' + this.itemsForArea(areaKey).length;
+            },
+
+            clearLaneDropTarget(areaKey, event) {
+                if (this.laneDropKey !== areaKey) {
+                    return;
+                }
+
+                const related = event?.relatedTarget;
+                if (related && event?.currentTarget?.contains?.(related)) {
+                    return;
+                }
+
+                this.laneDropKey = null;
+                if (this.dropTarget && this.dropTarget.startsWith(areaKey + ':')) {
+                    this.dropTarget = null;
+                }
+            },
+
+            handleLaneDrop(areaKey) {
+                if (!this.draggingItemId) {
+                    return;
+                }
+
+                const itemId = this.draggingItemId;
+                const targetIndex = this.itemsForArea(areaKey).length;
+                this.stopDragging();
+                this.moveItem(itemId, areaKey, targetIndex);
+            },
+
+            handleDrop(areaKey, index) {
+                if (!this.draggingItemId) {
+                    return;
+                }
+
+                const itemId = this.draggingItemId;
+                this.stopDragging();
+                this.moveItem(itemId, areaKey, index);
+            },
+
+            moveItem(itemId, targetAreaKey, targetIndex) {
+                this.boardError = '';
+
+                if (!this.participantToken && !this.hostToken) {
+                    this.boardError = 'Join the room first.';
+                    return;
+                }
+
+                this.movingItem = true;
+
+                fetch('/tools/scrum-retro/session/' + encodeURIComponent(this.sessionCode) + '/items/' + encodeURIComponent(itemId) + '/move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken(),
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        participant_token: this.participantToken,
+                        host_token: this.hostToken,
+                        target_area_key: targetAreaKey,
+                        target_index: targetIndex,
+                    }),
+                })
+                    .then(async (res) => {
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok || !data.success) {
+                            throw new Error(data.message || this.firstValidationError(data) || 'Unable to move item.');
+                        }
+
+                        this.fetchState();
+                    })
+                    .catch((error) => {
+                        this.boardError = error.message || 'Unable to move item.';
+                    })
+                    .finally(() => {
+                        this.movingItem = false;
+                    });
             },
 
             addIdea(areaKey) {
@@ -625,7 +883,7 @@
                     return;
                 }
 
-                if (!this.participantToken) {
+                if (!this.participantToken && !this.hostToken) {
                     this.boardError = 'Join the room first.';
                     return;
                 }
@@ -641,6 +899,7 @@
                     },
                     body: JSON.stringify({
                         participant_token: this.participantToken,
+                        host_token: this.hostToken,
                         area_key: areaKey,
                         text: message,
                     }),
@@ -652,6 +911,7 @@
                         }
 
                         this.draftByArea[areaKey] = '';
+                        this.closeComposer(areaKey);
                         this.fetchState();
                     })
                     .catch((error) => {
@@ -782,6 +1042,21 @@
                     });
             },
 
+            toggleFullscreen() {
+                this.setFullscreen(!this.fullscreen);
+            },
+
+            setFullscreen(value) {
+                this.fullscreen = !!value;
+
+                if (this.fullscreen) {
+                    document.body.classList.add('overflow-hidden');
+                    return;
+                }
+
+                document.body.classList.remove('overflow-hidden');
+            },
+
             startAnotherRoom() {
                 if (this.pollTimer) {
                     clearInterval(this.pollTimer);
@@ -799,6 +1074,7 @@
                 this.participantToken = null;
                 this.hostToken = null;
                 this.isHost = false;
+                this.setFullscreen(false);
                 this.areas = [];
                 this.items = [];
                 this.participants = [];
